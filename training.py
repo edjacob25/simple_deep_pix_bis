@@ -59,7 +59,8 @@ def main():
                                         allow_missing_files=True, do_balance=True,
                                         max_samples_per_file=15,
                                         channels='RGB', mask_op='flat', custom_size=14,
-                                        protocol_folder=protocol_folder)
+                                        protocol_folder=protocol_folder,
+                                        partition=2)
 
     validation_dataset = DataFolderPixBiS(data_folder=data_folder,
                                           transform=img_transform["train"],
@@ -77,9 +78,6 @@ def main():
     learning_rate = 0.0001
     weight_decay = 0.000001
     save_interval = 2
-
-    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    # torch.backends.cudnn.benchmark = True
 
     network = DeepPixBiS(pretrained=True)
     network.cuda()

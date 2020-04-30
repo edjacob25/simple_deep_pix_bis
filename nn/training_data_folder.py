@@ -7,11 +7,10 @@
 # ==============================================================================
 # Import what is needed here:
 
-import math
+from collections import Counter
 import random
 import traceback
 from pathlib import Path
-from random import sample
 from typing import List, Tuple
 
 import cv2 as cv
@@ -46,13 +45,44 @@ def get_frame(fname: Path, frame_idx=1) -> np.ndarray:
     return frame
 
 
-def balance_data_filebased(fnil):
-    from collections import Counter
+def balance_sample(bigger: List[Tuple[str, int]], smaller: List[Tuple[str, int]]) -> List[Tuple[str, int]]:
+    names = [ff[0].split("__")[0] for ff in bigger]
+
+    cnt = Counter(names)
+
+    frames_per_file = round(len(bigger) / len(cnt))  # would be low, now add some more to solve the issue
+
+    bigger_reduced = []
+
+    for file_name in sorted(cnt.keys()):
+
+        num_frames = cnt[file_name]
+
+        try:
+            sample_indexes = random.sample(range(num_frames), frames_per_file)
+        except ValueError:
+            sample_indexes = range(num_frames)
+
+        file_tuples = [x for x in bigger_reduced if x[0].split("__")[0] == file_name]
+
+        ffs = [x for i, x in enumerate(file_tuples) if i in sample_indexes]
+        bigger_reduced.extend(ffs)
+
+    try:
+        new_indexes = random.sample(range(len(bigger)), len(smaller) - len(bigger_reduced))
+    except ValueError:
+        new_indexes = []
+
+    bigger_reduced.extend([x for i, x in enumerate(bigger) if i in new_indexes])
+
+    return bigger_reduced + smaller
+
+
+def balance_data_file_based(tuples: List[Tuple[str, int]]) -> List[Tuple[str, int]]:
 
     ''' Return a balanced list of files tuples '''
-    reals = [ff for ff in fnil if ff[2] == 1]
-
-    attacks = [ff for ff in fnil if ff[2] == -1]
+    reals = [ff for ff in tuples if ff[1] == 1]
+    attacks = [ff for ff in tuples if ff[1] == -1]
 
     num_reals = len(reals)
     num_attacks = len(attacks)
@@ -65,110 +95,23 @@ def balance_data_filebased(fnil):
     if num_reals > num_attacks:
 
         # downsample reals
-
-        names = [ff[0] for ff in reals]
-
-        cnt = Counter(names)
-
-        frames_perfile = round(num_attacks / len(cnt))  # would be low, now add some more to solve the issue
-
-        new_reals = []
-        new_attacks = attacks
-
-        for file_name in sorted(cnt.keys()):
-
-            num_files = cnt[file_name]
-
-            try:
-                sample_idx = random.sample(range(num_files), frames_perfile)
-            except:
-                sample_idx = range(num_files)
-
-            ffs = [ff for ff in reals if ff[0] == file_name]
-
-            ffs = [ff for idx, ff in enumerate(ffs) if idx in sample_idx]
-            new_reals = new_reals + ffs
-
-        try:
-            new_indexes = random.sample(range(len(reals)), len(new_attacks) - len(new_reals))
-        except:
-            new_indexes = []
-
-        new_reals = new_reals + [ff for idx, ff in enumerate(reals) if idx in new_indexes]
-
-        fnil_balanced = new_reals + new_attacks
-
+        balanced = balance_sample(reals, attacks)
 
     else:
         # downsample attacks        
-        names = [ff[0] for ff in attacks]
+        balanced = balance_sample(attacks, reals)
 
-        cnt = Counter(names)
-
-        frames_perfile = round(num_reals / len(cnt))  # would be low, now add some more to solve the issue
-
-        new_reals = reals
-        new_attacks = []
-
-        for file_name in sorted(cnt.keys()):
-
-            num_files = cnt[file_name]
-
-            try:
-                sample_idx = random.sample(range(num_files), frames_perfile)
-            except:
-                sample_idx = range(num_files)
-
-            ffs = [ff for ff in attacks if ff[0] == file_name]
-
-            ffs = [ff for idx, ff in enumerate(ffs) if idx in sample_idx]
-            new_attacks = new_attacks + ffs
-
-        try:
-            new_indexes = random.sample(range(len(attacks)), len(new_reals) - len(new_attacks))
-        except:
-            new_indexes = []
-
-        new_attacks = new_attacks + [ff for idx, ff in enumerate(attacks) if idx in new_indexes]
-
-        fnil_balanced = new_reals + new_attacks
-
+    new_reals = [ff for ff in balanced if ff[1] == 1]
+    new_attacks = [ff for ff in balanced if ff[1] == -1]
     print("num_reals", len(new_reals), "num_attacks", len(new_attacks))
 
-    return fnil_balanced
+    return balanced
 
 
-def get_index_from_file_names(file_names_and_labels, data_folder, max_samples_per_file):
-    file_names_index_and_labels = []
-
-    for file_name, label in file_names_and_labels:
-        file_path = Path(data_folder) / file_name
-        v = cv.VideoCapture(str(file_path))
-        frames_in_video = int(v.get(cv.CAP_PROP_FRAME_COUNT))
-        # print(f"{file_path} - {frames_in_video} frames")
-        if max_samples_per_file > frames_in_video:
-            indexes = [x for x in range(frames_in_video)]
-        else:
-            indexes = sample([x for x in range(frames_in_video)], max_samples_per_file)
-        for k in indexes:
-            file_names_index_and_labels.append((file_name, k, label))
-
-    print(file_names_index_and_labels)
-    return file_names_index_and_labels
-
-
-def get_file_names_and_labels(files_folder, protocol_folder: Path = None, groups: List = None):
+def get_file_names_and_labels(files_folder, partition, protocol_folder: Path, groups: List[str] = None) -> List[
+    Tuple[str, int]]:
     """
     Get absolute names of the corresponding file objects and their class labels.
-
-    **Parameters:**
-
-    ``files`` : [File]
-        A list of files objects defined in the High Level Database Interface
-        of the particular datbase.
-
-    ``data_folder`` : str
-        A directory containing the training data.
 
     **Returns:**
 
@@ -179,26 +122,18 @@ def get_file_names_and_labels(files_folder, protocol_folder: Path = None, groups
 
     file_names_and_labels = []
     folder = Path(files_folder)
-    files_present = []
     for g in groups:
-        files = [x.name for x in (folder / g).iterdir() if x.suffix == ".avi"]
-        files_present.extend(files)
-    print(files_present)
-    if protocol_folder is not None:
-        for file in protocol_folder.iterdir():
-            if any([x in file.name.lower() for x in groups]) and file.suffix == ".txt":
-                group = [g for g in groups if g in file.name.lower()][0]
-                with file.open("r") as f:
-                    # print(file.name)
-                    for line in f:
-                        if line.isspace():
-                            continue
-                        label, name = line.split(",")
-                        name = f"{name.strip()}.avi"
-                        # print(f"{name.strip()} - {label}")
-                        if name in files_present:
-                            file_names_and_labels.append((f"{group}/{name}", int(label)))
-
+        group_files = [x.name for x in (folder / g).iterdir() if x.suffix == ".png"]
+        partition_data = protocol_folder / f"{g.capitalize()}_{partition}.txt"
+        with partition_data.open("r") as f:
+            for line in f:
+                if line.isspace():
+                    continue
+                label, name = line.split(",")
+                name = name.strip()
+                item_files = [x for x in group_files if x.startswith(name)]
+                item_tuples = [(f"{g}/{x}", int(label)) for x in item_files]
+                file_names_and_labels.extend(item_tuples)
     print(file_names_and_labels)
     return file_names_and_labels
 
@@ -218,6 +153,7 @@ class DataFolderPixBiS(data.Dataset):
                  mask_op='flat',
                  custom_size=224,
                  protocol_folder=None,
+                 partition=1,
                  **kwargs):
         """
         **Parameters:**
@@ -277,24 +213,17 @@ class DataFolderPixBiS(data.Dataset):
         protocol_folder = Path(protocol_folder) / protocol
 
         file_names_and_labels = get_file_names_and_labels(files_folder=data_folder,
+                                                          partition=partition,
                                                           protocol_folder=protocol_folder,
                                                           groups=groups)
 
-        self.file_names_and_labels = file_names_and_labels  # list of videos # relative paths, not absolute
+        if self.do_balance:
+            file_names_and_labels = balance_data_file_based(file_names_and_labels)
 
         # Added shuffling of the list
+        random.shuffle(file_names_and_labels)
 
-        file_names_index_and_labels = get_index_from_file_names(self.file_names_and_labels, self.data_folder,
-                                                                self.max_samples_per_file)
-
-        ## Subsampling should be performed here. Should respect the attack types?, here it subsamples based on file
-
-        if self.do_balance:
-            file_names_index_and_labels = balance_data_filebased(file_names_index_and_labels)
-
-        random.shuffle(file_names_index_and_labels)
-
-        self.file_names_index_and_labels = file_names_index_and_labels
+        self.file_names_and_labels = file_names_and_labels  # list of videos # relative paths, not absolute
 
     # ==========================================================================
     def __getitem__(self, index):
@@ -319,13 +248,12 @@ class DataFolderPixBiS(data.Dataset):
             Index of the class.
 
         """
-        path, frame_idx, target = self.file_names_index_and_labels[index]  # relative path
-
-        modality_path = self.data_folder / path  # Now, absolute path to each of the files
-
+        path, target = self.file_names_and_labels[index]  # relative path
+        complete_path = self.data_folder / path  # Now, absolute path to each of the files
         try:
 
-            img_array = get_frame(modality_path, frame_idx=frame_idx)
+            img_array = cv.imread(str(complete_path))
+            print(img_array)
             # print(img_array.shape)
             if img_array.shape[0] == 3:
 
@@ -376,7 +304,7 @@ class DataFolderPixBiS(data.Dataset):
             # print(pil_imgs_stacko.shape)
             return img, labels
         except Exception as e:
-            print(f"{path} - {frame_idx}")
+            print(f"{path}")
             traceback.print_exc()
 
     # ==========================================================================

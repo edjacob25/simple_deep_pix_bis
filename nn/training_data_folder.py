@@ -134,7 +134,7 @@ def get_file_names_and_labels(files_folder, partition, protocol_folder: Path, gr
                 item_files = [x for x in group_files if x.startswith(name)]
                 item_tuples = [(f"{g}/{x}", int(label)) for x in item_files]
                 file_names_and_labels.extend(item_tuples)
-    print(file_names_and_labels)
+    # print(file_names_and_labels)
     return file_names_and_labels
 
 
@@ -143,7 +143,7 @@ class DataFolderPixBiS(data.Dataset):
 
     def __init__(self, data_folder,
                  transform=None,
-                 groups=['train', 'dev', 'eval'],
+                 groups=['train', 'dev', 'test'],
                  protocol='nowig',
                  purposes=['real', 'attack'],
                  allow_missing_files=True,
@@ -253,7 +253,7 @@ class DataFolderPixBiS(data.Dataset):
         try:
 
             img_array = cv.imread(str(complete_path))
-            print(img_array)
+            # print(img_array)
             # print(img_array.shape)
             if img_array.shape[0] == 3:
 
@@ -298,7 +298,7 @@ class DataFolderPixBiS(data.Dataset):
                 if self.custom_size != 224:
                     mask = np.ones((self.custom_size, self.custom_size), dtype='float') * 0.01
 
-            labels = {'pixel_mask': Tensor(mask), 'binary_target': target}
+            labels = {'pixel_mask': Tensor(mask), 'binary_target': target, 'name': path}
 
             img = {'image': Tensor(pil_imgs_stacko)}
             # print(pil_imgs_stacko.shape)
@@ -315,4 +315,4 @@ class DataFolderPixBiS(data.Dataset):
         ``len`` : int
             The length of the file list.
         """
-        return len(self.file_names_index_and_labels)
+        return len(self.file_names_and_labels)

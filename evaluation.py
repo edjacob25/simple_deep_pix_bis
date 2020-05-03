@@ -26,8 +26,9 @@ def main():
                                        allow_missing_files=True, do_balance=True,
                                        max_samples_per_file=15,
                                        channels='RGB', mask_op='flat', custom_size=14,
-                                       protocol_folder=protocol_folder)
-    batch_size = 32
+                                       protocol_folder=protocol_folder,
+                                       partition=1)
+    batch_size = 1
     num_workers = 8
     data = DataLoader(testing_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True)
 
@@ -38,40 +39,16 @@ def main():
 
     with torch.no_grad():
         network.eval()
-        test_loss = 0
         accuracy = 0
         for images, labels in data:
             images_v = Variable(images['image'].to(device))
 
-            labels_v_pixel = Variable(labels['pixel_mask'].to(device))
-
-            labels_v_binary = Variable(labels['binary_target'].to(device))
-            # print(images_v.shape)
             out = network.forward(images_v)
+            map_res = out[0].cpu().numpy()
+            res = map_res.flatten().mean()
+            print("------------------")
+            print(f"{res} - {labels['binary_target']} - {labels['name']}")
 
-            # print("B")
-
-            criterion_pixel = nn.BCELoss()
-
-            criterion_bce = nn.BCELoss()
-
-            loss_pixel = criterion_pixel(out[0].squeeze(1), labels_v_pixel.float())
-
-            loss_bce = criterion_bce(out[1], labels_v_binary.unsqueeze(1).float())
-
-            beta = 0.5
-
-            test_loss += beta * loss_bce + (1.0 - beta) * loss_pixel
-
-            # print(out[1])
-            # print(labels['binary_target'])
-
-            ps = torch.exp(out[1])
-            # print(labels_v_binary.unsqueeze(1).float())
-            # print(ps)
-            equality = (labels_v_binary.unsqueeze(1).float() == ps.max(dim=1)[1])
-            # print(equality)
-            accuracy += equality.mean()
         print(accuracy)
 
 

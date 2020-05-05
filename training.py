@@ -1,4 +1,6 @@
 from configparser import ConfigParser
+from pathlib import Path
+from shutil import rmtree
 
 from torch import nn, optim
 from torch.autograd import Variable
@@ -49,53 +51,61 @@ def main():
         'val': transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])}
 
-    data_folder = config["ROUTES"]["base_data"]
-    protocol_folder = f"{config['ROUTES']['base_files']}/Protocols"
-    training_dataset = DataFolderPixBiS(data_folder=data_folder,
-                                        transform=img_transform["train"],
-                                        groups=['train'],
-                                        protocol="Protocol_4",
-                                        purposes=['real', 'attack'],
-                                        allow_missing_files=True, do_balance=True,
-                                        max_samples_per_file=15,
-                                        channels='RGB', mask_op='flat', custom_size=14,
-                                        protocol_folder=protocol_folder,
-                                        partition=2)
+    for partition in range(1, 7):
+        data_folder = config["ROUTES"]["base_data"]
+        protocol_folder = f"{config['ROUTES']['base_files']}/Protocols"
+        training_dataset = DataFolderPixBiS(data_folder=data_folder,
+                                            transform=img_transform["train"],
+                                            groups=['train'],
+                                            protocol="Protocol_4",
+                                            purposes=['real', 'attack'],
+                                            allow_missing_files=True, do_balance=True,
+                                            max_samples_per_file=15,
+                                            channels='RGB', mask_op='flat', custom_size=14,
+                                            protocol_folder=protocol_folder,
+                                            partition=partition)
 
-    validation_dataset = DataFolderPixBiS(data_folder=data_folder,
-                                          transform=img_transform["train"],
-                                          groups=['dev'],
-                                          protocol="Protocol_4",
-                                          purposes=['real', 'attack'],
-                                          allow_missing_files=True, do_balance=True,
-                                          max_samples_per_file=8,
-                                          channels='RGB', mask_op='flat', custom_size=14,
-                                          protocol_folder=protocol_folder)
+        validation_dataset = DataFolderPixBiS(data_folder=data_folder,
+                                              transform=img_transform["train"],
+                                              groups=['dev'],
+                                              protocol="Protocol_4",
+                                              purposes=['real', 'attack'],
+                                              allow_missing_files=True, do_balance=True,
+                                              max_samples_per_file=8,
+                                              channels='RGB', mask_op='flat', custom_size=14,
+                                              protocol_folder=protocol_folder,
+                                              partition=partition)
 
-    batch_size = 32
-    num_workers = 8
-    epochs = 5
-    learning_rate = 0.0001
-    weight_decay = 0.000001
-    save_interval = 2
+        batch_size = 32
+        num_workers = 8
+        epochs = 5
+        learning_rate = 0.0001
+        weight_decay = 0.000001
+        save_interval = 2
 
-    network = DeepPixBiS(pretrained=True)
-    network.cuda()
-    for name, param in network.named_parameters():
-        param.requires_grad = True
+        network = DeepPixBiS(pretrained=True)
+        network.cuda()
+        for name, param in network.named_parameters():
+            param.requires_grad = True
 
-    # optimizer initialization
+        # optimizer initialization
 
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, network.parameters()), lr=learning_rate,
-                           weight_decay=weight_decay)
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, network.parameters()), lr=learning_rate,
+                               weight_decay=weight_decay)
 
-    data = {"train": DataLoader(training_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True),
-            "val": DataLoader(validation_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True)}
+        data = {"train": DataLoader(training_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True),
+                "val": DataLoader(validation_dataset, batch_size=batch_size, num_workers=num_workers, shuffle=True)}
 
-    trainer = GenericTrainer(network, optimizer, compute_loss, learning_rate, batch_size, "cuda", True,
-                             save_interval=save_interval)
+        trainer = GenericTrainer(network, optimizer, compute_loss, learning_rate, batch_size, "cuda", True,
+                                 save_interval=save_interval)
 
-    trainer.train(data, epochs)
+        output_dir = Path(f"out/Partition{partition}")
+
+        if output_dir.exists():
+            rmtree(output_dir)
+        output_dir.mkdir()
+
+        trainer.train(data, epochs, output_dir=output_dir)
 
 
 if __name__ == '__main__':

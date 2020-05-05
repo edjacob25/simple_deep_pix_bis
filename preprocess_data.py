@@ -59,7 +59,7 @@ def main():
     config = ConfigParser()
     config.read("config.ini")
 
-    data_dir = Path(args.directory) if args.directory else Path(config["ROUTES"]["base_data"])
+    data_dir = Path(args.directory) if args.directory else Path(config["ROUTES"]["initial_files"])
     save_dir = Path(args.save_dir) if args.save_dir else (Path(config["ROUTES"]["base_files"]) / "Preprocessed")
 
     if not data_dir.exists() or not data_dir.is_dir():

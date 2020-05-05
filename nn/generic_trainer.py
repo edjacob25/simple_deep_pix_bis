@@ -147,7 +147,7 @@ class GenericTrainer(object):
         for name, param in self.network.named_parameters():
 
             if param.requires_grad:
-                print('Layer to be adapted from grad check : {}'.format(name))
+                print(f'Layer to be adapted from grad check : {name}')
 
         # setup optimizer
 
@@ -215,7 +215,7 @@ class GenericTrainer(object):
 
                     epoch_val_loss = np.mean(val_loss_history)
 
-                    print("Val Loss : {}  epoch : {}".format(epoch_val_loss, epoch))
+                    print(f"Val Loss : {epoch_val_loss}  epoch : {epoch}")
 
                     if phase == 'val' and epoch_val_loss < best_loss:
                         print(

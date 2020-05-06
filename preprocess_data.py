@@ -6,6 +6,8 @@ from pathlib import Path
 from random import sample
 from shutil import rmtree
 
+from nn.common import get_coordinates_of_eyes_in_frame, get_slices
+
 face_classifier = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
 
 
@@ -20,15 +22,22 @@ def save_frame(fname: Path, save_dir: Path, frame_idx=1):
     faces = face_classifier.detectMultiScale(gray, 1.3, 5)
 
     if len(faces) < 1:
-        return
+        print(f"Could not find a face in frame {frame_idx} for file {fname}, using backup method")
+        eyes = get_coordinates_of_eyes_in_frame(fname.with_suffix(".txt"), frame_idx)
+        xs, ys = get_slices(eyes)
+        frame = frame[ys[0]: ys[1], xs[0]: xs[1], :]
 
-    x, y, w, h = faces[0]
-
-    frame = frame[y: y + h, x: x + h, :]
+    else:
+        x, y, w, h = faces[0]
+        frame = frame[y: y + h, x: x + h, :]
 
     if frame.shape != (3, 224, 224):
-        resized = cv.resize(frame, (224, 224), interpolation=cv.INTER_AREA)
-        frame = resized
+        try:
+            resized = cv.resize(frame, (224, 224), interpolation=cv.INTER_AREA)
+            frame = resized
+        except:
+            print(f"Error with frame {frame_idx} for file {fname}, has shape {frame.shape}")
+            return
 
     save_path = save_dir / f"{fname.stem}__{frame_idx}.png"
     print(f"Saving frame {frame_idx} to {save_path}")

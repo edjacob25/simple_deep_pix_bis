@@ -1,7 +1,6 @@
 from configparser import ConfigParser
 
 import torch
-from torch import nn
 from torch.autograd import Variable
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms
